@@ -1,13 +1,17 @@
 :root {
   color-scheme: light dark;
-  --bg: #eff3ec;
+  --bg: #f4f7f3;
   --fg: #132218;
   --accent: #2f9d53;
   --accent-dark: #1f6e3a;
-  --accent-soft: #c9edd7;
-  --card-bg: rgba(255, 255, 255, 0.92);
-  --muted: #516052;
-  --border: rgba(61, 99, 70, 0.18);
+  --accent-soft: #d8f2e3;
+  --card-bg: rgba(255, 255, 255, 0.95);
+  --muted: #4c5d4d;
+  --border: rgba(61, 99, 70, 0.16);
+  --warning: #ffb843;
+  --warning-bg: rgba(255, 184, 67, 0.18);
+  --info: #1f6e3a;
+  --info-bg: rgba(47, 157, 83, 0.12);
   --pill-active: rgba(47, 157, 83, 0.18);
   --pill-upcoming: rgba(255, 184, 67, 0.2);
   --pill-complete: rgba(99, 125, 107, 0.2);
@@ -22,15 +26,16 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 10% 10%, rgba(47, 157, 83, 0.12), transparent 40%),
-    radial-gradient(circle at 90% 5%, rgba(47, 157, 83, 0.08), transparent 45%), var(--bg);
+  background: radial-gradient(circle at 12% 10%, rgba(47, 157, 83, 0.1), transparent 42%),
+    radial-gradient(circle at 88% 6%, rgba(47, 157, 83, 0.06), transparent 48%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.85), transparent 45%), var(--bg);
   color: var(--fg);
   display: flex;
   flex-direction: column;
 }
 
 .hero {
-  background: linear-gradient(140deg, rgba(18, 53, 29, 0.95), rgba(47, 157, 83, 0.85));
+  background: linear-gradient(140deg, rgba(18, 53, 29, 0.92), rgba(47, 157, 83, 0.75));
   color: white;
   padding: 2.5rem 1.5rem 5rem;
   position: relative;
@@ -196,6 +201,7 @@ body {
 .form-grid {
   display: grid;
   gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
 .form-grid label,
@@ -204,6 +210,11 @@ body {
   flex-direction: column;
   gap: 0.5rem;
   font-weight: 500;
+}
+
+.form-grid fieldset,
+.form-grid textarea {
+  grid-column: 1 / -1;
 }
 
 input,
@@ -269,6 +280,13 @@ textarea:focus {
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.45);
   box-shadow: none;
+}
+
+.button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .button--ghost:hover,
@@ -486,6 +504,38 @@ textarea:focus {
   gap: 1.25rem;
 }
 
+.transparency__grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.transparency__item {
+  padding: 1.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 18px 35px rgba(19, 34, 24, 0.08);
+}
+
+.transparency__item h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+}
+
+.transparency__item p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+.transparency__item ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.35rem;
+  color: var(--fg);
+}
+
 .update-card {
   border-radius: 1.1rem;
   border: 1px solid rgba(47, 157, 83, 0.12);
@@ -627,6 +677,13 @@ textarea:focus {
   gap: 0.25rem;
 }
 
+.donation-item--empty {
+  background: rgba(47, 157, 83, 0.05);
+  color: var(--muted);
+  font-style: italic;
+  align-items: center;
+}
+
 .donation-item__meta {
   font-size: 0.85rem;
   color: var(--muted);
@@ -667,6 +724,34 @@ textarea:focus {
 
 .progress__totals {
   font-weight: 600;
+}
+
+.donation-feedback {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  font-weight: 500;
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.donation-feedback[hidden] {
+  display: none;
+}
+
+.donation-feedback--success {
+  background: rgba(47, 157, 83, 0.16);
+  color: var(--accent-dark);
+}
+
+.donation-feedback--error {
+  background: rgba(187, 46, 46, 0.12);
+  color: #9b1c1c;
+}
+
+.donation-feedback--warning {
+  background: var(--warning-bg);
+  color: #8a4f05;
 }
 
 .admin-panel {

@@ -134,6 +134,12 @@ const seededDonations = [
   },
 ];
 
+let STRIPE_PUBLISHABLE_KEY =
+  document.querySelector('meta[name="stripe-publishable-key"]')?.getAttribute("content")?.trim() || "";
+const STRIPE_API_BASE = "/api";
+const PENDING_DONATIONS_KEY = "cropcarbon-pending-donations";
+let stripeClientPromise = null;
+
 function toValidDate(value) {
   const date = value instanceof Date ? value : new Date(value);
   return Number.isNaN(date.getTime()) ? new Date() : date;
@@ -183,6 +189,140 @@ function cloneDonations(donations = seededDonations) {
   }));
 }
 
+async function ensureStripePublishableKey() {
+  if (STRIPE_PUBLISHABLE_KEY) {
+    return STRIPE_PUBLISHABLE_KEY;
+  }
+
+  try {
+    const response = await fetch(`${STRIPE_API_BASE}/config`);
+    if (!response.ok) {
+      return STRIPE_PUBLISHABLE_KEY;
+    }
+    const payload = await response.json().catch(() => ({}));
+    if (payload?.publishableKey) {
+      STRIPE_PUBLISHABLE_KEY = String(payload.publishableKey);
+    }
+  } catch (error) {
+    console.warn("Unable to load Stripe publishable key", error);
+  }
+
+  return STRIPE_PUBLISHABLE_KEY;
+}
+
+async function loadStripeClient() {
+  if (stripeClientPromise) {
+    return stripeClientPromise;
+  }
+
+  const publishableKey = await ensureStripePublishableKey();
+  if (!publishableKey) {
+    throw new Error("Missing Stripe publishable key.");
+  }
+
+  stripeClientPromise = new Promise((resolve, reject) => {
+    if (typeof window === "undefined") {
+      reject(new Error("Stripe can only initialise in the browser."));
+      return;
+    }
+
+    const startTime = Date.now();
+
+    const attemptInitialisation = () => {
+      if (window.Stripe) {
+        try {
+          const stripe = window.Stripe(publishableKey);
+          resolve(stripe);
+        } catch (error) {
+          reject(error);
+        }
+        return;
+      }
+
+      if (Date.now() - startTime > 6000) {
+        reject(new Error("Stripe.js failed to load."));
+        return;
+      }
+
+      window.requestAnimationFrame(attemptInitialisation);
+    };
+
+    attemptInitialisation();
+  });
+
+  return stripeClientPromise;
+}
+
+function getSessionStore() {
+  if (typeof window === "undefined" || !("sessionStorage" in window)) {
+    return null;
+  }
+
+  try {
+    const testKey = "__cropcarbon_session__";
+    window.sessionStorage.setItem(testKey, "1");
+    window.sessionStorage.removeItem(testKey);
+    return window.sessionStorage;
+  } catch (error) {
+    console.warn("Session storage unavailable", error);
+    return null;
+  }
+}
+
+const sessionStore = getSessionStore();
+
+function loadPendingDonations() {
+  if (!sessionStore) {
+    return {};
+  }
+
+  try {
+    const raw = sessionStore.getItem(PENDING_DONATIONS_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    console.warn("Unable to read pending donations", error);
+    return {};
+  }
+}
+
+let pendingDonations = loadPendingDonations();
+
+function persistPendingDonations() {
+  if (!sessionStore) {
+    return;
+  }
+
+  try {
+    sessionStore.setItem(PENDING_DONATIONS_KEY, JSON.stringify(pendingDonations));
+  } catch (error) {
+    console.warn("Unable to persist pending donations", error);
+  }
+}
+
+function stashPendingDonation(sessionId, data) {
+  if (!sessionId) {
+    return;
+  }
+  pendingDonations[sessionId] = data;
+  persistPendingDonations();
+}
+
+function popPendingDonation(sessionId) {
+  if (!sessionId) {
+    return null;
+  }
+  const data = pendingDonations[sessionId] || null;
+  if (sessionId in pendingDonations) {
+    delete pendingDonations[sessionId];
+    persistPendingDonations();
+  }
+  return data;
+}
+
 function createDefaultState() {
   return {
     campaign: {
@@ -194,6 +334,7 @@ function createDefaultState() {
     donations: cloneDonations(),
     meta: {
       updateCounter: seededUpdates.length + 1,
+      processedSessions: [],
     },
   };
 }
@@ -236,6 +377,7 @@ function hydrateState(stored) {
     donations: donations.length ? cloneDonations(donations) : base.donations,
     meta: {
       updateCounter: Number(meta.updateCounter) || base.meta.updateCounter,
+      processedSessions: Array.isArray(meta.processedSessions) ? [...new Set(meta.processedSessions)] : [],
     },
   };
 }
@@ -262,6 +404,9 @@ function loadState() {
 
 let state = loadState();
 state.meta.updateCounter = Math.max(state.meta.updateCounter || 1, state.updates.length + 1);
+state.meta.processedSessions = Array.isArray(state.meta.processedSessions)
+  ? [...new Set(state.meta.processedSessions)]
+  : [];
 
 function persistState() {
   if (!storage) {
@@ -284,6 +429,7 @@ function persistState() {
     })),
     meta: {
       updateCounter: state.meta.updateCounter,
+      processedSessions: state.meta.processedSessions,
     },
   };
 
@@ -294,10 +440,25 @@ function persistState() {
   }
 }
 
+function hasProcessedSession(sessionId) {
+  return state.meta.processedSessions.includes(sessionId);
+}
+
+function markSessionProcessed(sessionId) {
+  if (!sessionId || hasProcessedSession(sessionId)) {
+    return;
+  }
+  state.meta.processedSessions.push(sessionId);
+  if (state.meta.processedSessions.length > 100) {
+    state.meta.processedSessions = state.meta.processedSessions.slice(-100);
+  }
+}
+
 const footprintForm = document.getElementById("footprint-form");
 const resultEl = document.querySelector("#footprint-result [data-field='total']");
 const donationForm = document.getElementById("donation-form");
 const donationList = document.getElementById("donation-list");
+const donationFeedback = document.getElementById("donation-feedback");
 const goalField = document.querySelector("[data-field='goal']");
 const raisedField = document.querySelector("[data-field='raised']");
 const percentField = document.querySelector("[data-field='percent']");
@@ -338,6 +499,30 @@ function formatCurrency(value) {
 
 function formatNumber(value, options = {}) {
   return value.toLocaleString(undefined, options);
+}
+
+function showDonationFeedback(message, variant = "info") {
+  if (!donationFeedback) {
+    return;
+  }
+
+  const variants = ["success", "error", "warning"];
+  donationFeedback.classList.remove(
+    ...variants.map((type) => `donation-feedback--${type}`),
+  );
+
+  if (!message) {
+    donationFeedback.hidden = true;
+    donationFeedback.textContent = "";
+    return;
+  }
+
+  if (variants.includes(variant)) {
+    donationFeedback.classList.add(`donation-feedback--${variant}`);
+  }
+
+  donationFeedback.hidden = false;
+  donationFeedback.textContent = message;
 }
 
 function escapeHtml(value) {
@@ -740,11 +925,18 @@ function handleGlobalKeyDown(event) {
 
 function renderDonations() {
   donationList.innerHTML = "";
-  state.donations
+  const recentDonations = state.donations
     .slice()
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-    .slice(0, 6)
-    .forEach((donation) => {
+    .slice(0, 6);
+
+  if (recentDonations.length === 0) {
+    const li = document.createElement("li");
+    li.className = "donation-item donation-item--empty";
+    li.textContent = "No donations yet — kick off the momentum.";
+    donationList.appendChild(li);
+  } else {
+    recentDonations.forEach((donation) => {
       const li = document.createElement("li");
       li.className = "donation-item";
       const messageHtml = donation.message
@@ -758,6 +950,7 @@ function renderDonations() {
       `;
       donationList.appendChild(li);
     });
+  }
 
   goalField.textContent = state.campaign.goal.toLocaleString();
   raisedField.textContent = state.campaign.raised.toLocaleString();
@@ -769,6 +962,104 @@ function renderDonations() {
   adminRaisedInput.value = state.campaign.raised.toString();
 }
 
+async function fetchStripeSession(sessionId) {
+  const response = await fetch(`${STRIPE_API_BASE}/session/${encodeURIComponent(sessionId)}`);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const errorMessage = payload?.error || payload?.message || "Unable to verify Stripe payment.";
+    throw new Error(errorMessage);
+  }
+  return payload;
+}
+
+async function completeStripeDonation(sessionId) {
+  if (hasProcessedSession(sessionId)) {
+    showDonationFeedback("Thanks again for supporting CropCarbon!", "success");
+    return;
+  }
+
+  try {
+    const session = await fetchStripeSession(sessionId);
+    const paymentStatus = session.payment_status || session.status;
+    const mode = session.mode || "payment";
+    const isPaid = paymentStatus === "paid" || paymentStatus === "complete" || session.status === "complete";
+
+    if (!isPaid) {
+      showDonationFeedback(
+        "We couldn't confirm your Stripe payment yet. Give us a minute or check your receipt.",
+        "warning",
+      );
+      return;
+    }
+
+    const pending = popPendingDonation(sessionId);
+    const amount = Number(pending?.amount ?? session.amount ?? 0);
+    const frequency =
+      pending?.frequency ||
+      session.frequency ||
+      (mode === "subscription" && session.interval ? session.interval : mode === "subscription" ? "monthly" : "once");
+    const message = pending?.message || session.message || "";
+    const name =
+      pending?.name ||
+      session.customer_name ||
+      session.customer?.name ||
+      session.customer_details?.name ||
+      "Supporter";
+
+    const donationAmount = Math.max(amount, 0);
+    if (donationAmount > 0) {
+      state.donations.unshift({
+        name,
+        amount: donationAmount,
+        frequency,
+        message,
+        timestamp: new Date(),
+      });
+
+      if (frequency === "monthly") {
+        state.campaign.raised += donationAmount * 12;
+      } else {
+        state.campaign.raised += donationAmount;
+      }
+    }
+
+    markSessionProcessed(sessionId);
+    persistState();
+    renderDonations();
+    updateImpactStats();
+    updateCampaignOverview();
+    showDonationFeedback("Thank you! Your Stripe payment is confirmed.", "success");
+  } catch (error) {
+    console.error("Failed to reconcile Stripe session", error);
+    showDonationFeedback(
+      error.message || "We couldn't verify your Stripe payment. Please reach out with your Stripe receipt.",
+      "error",
+    );
+  }
+}
+
+async function maybeHandleStripeReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const donationStatus = params.get("donation");
+  const sessionId = params.get("session_id");
+
+  if (!donationStatus) {
+    return;
+  }
+
+  if (donationStatus === "success" && sessionId) {
+    await completeStripeDonation(sessionId);
+  } else if (donationStatus === "cancelled") {
+    showDonationFeedback("You left the Stripe checkout before paying. Feel free to try again when you're ready.", "warning");
+  }
+
+  params.delete("donation");
+  params.delete("session_id");
+  const nextSearch = params.toString();
+  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`;
+  window.history.replaceState({}, document.title, nextUrl);
+}
+
 function handleFootprintSubmit(event) {
   event.preventDefault();
   const formData = new FormData(footprintForm);
@@ -776,29 +1067,86 @@ function handleFootprintSubmit(event) {
   updateFootprintDisplay(perPerson);
 }
 
-function handleDonationSubmit(event) {
+async function handleDonationSubmit(event) {
   event.preventDefault();
+
+  const publishableKey = await ensureStripePublishableKey();
+  if (!publishableKey) {
+    showDonationFeedback("Connect your Stripe publishable key to enable secure payments.", "warning");
+    return;
+  }
+
   const formData = new FormData(donationForm);
-  const amount = Math.max(Number(formData.get("donation-amount")) || 0, 1);
-  const frequency = formData.get("frequency") || "once";
-  const message = formData.get("donor-message")?.trim();
+  const amountInput = Number(formData.get("donation-amount"));
+  if (!Number.isFinite(amountInput) || amountInput <= 0) {
+    showDonationFeedback("Enter a valid donation amount to continue.", "error");
+    return;
+  }
 
-  state.donations.unshift({
-    name: "You",
-    amount,
-    frequency,
-    message,
-    timestamp: new Date(),
-  });
+  const amount = Math.min(Math.round(amountInput * 100) / 100, 100000);
+  const rawFrequency = String(formData.get("frequency") || "once");
+  const allowedFrequencies = new Set(["once", "monthly", "annual"]);
+  const frequency = allowedFrequencies.has(rawFrequency) ? rawFrequency : "once";
+  const message = (formData.get("donor-message") || "").toString().trim().slice(0, 280);
+  const donorName = (formData.get("donor-name") || "").toString().trim().slice(0, 80) || "Supporter";
 
-  const multiplier = frequency === "monthly" ? 12 : 1;
-  state.campaign.raised += amount * multiplier;
+  const submitButton = donationForm.querySelector("button[type='submit']");
+  const originalText = submitButton?.textContent;
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Connecting to Stripe…";
+  }
 
-  donationForm.reset();
-  donationForm.querySelector("input[name='frequency'][value='once']").checked = true;
+  showDonationFeedback("Redirecting you to our secure Stripe checkout…");
 
-  persistState();
-  renderDonations();
+  try {
+    const response = await fetch(`${STRIPE_API_BASE}/create-checkout-session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        amount,
+        frequency,
+        message,
+        name: donorName,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const errorMessage = payload?.error || payload?.message || "Unable to start checkout.";
+      throw new Error(errorMessage);
+    }
+
+    const { id: sessionId } = payload;
+    if (!sessionId) {
+      throw new Error("Stripe session missing an identifier.");
+    }
+
+    stashPendingDonation(sessionId, {
+      amount,
+      frequency,
+      message,
+      name: donorName,
+      createdAt: Date.now(),
+    });
+
+    const stripe = await loadStripeClient();
+    const { error } = await stripe.redirectToCheckout({ sessionId });
+    if (error) {
+      popPendingDonation(sessionId);
+      showDonationFeedback(error.message || "We couldn't reach Stripe. Please try again.", "error");
+    }
+  } catch (error) {
+    console.error("Stripe checkout failed", error);
+    showDonationFeedback(error.message || "We couldn't start the Stripe checkout. Please try again.", "error");
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalText || "Contribute";
+    }
+  }
 }
 
 function handleCampaignFormSubmit(event) {
@@ -903,9 +1251,33 @@ function initializeAdminForms() {
 
 document.getElementById("year").textContent = new Date().getFullYear();
 renderCampaignPanel();
+updateCampaignOverview();
 renderDonations();
+updateImpactStats();
 renderUpdates();
 initializeAdminForms();
+
+ensureStripePublishableKey()
+  .then((key) => {
+    if (!key) {
+      showDonationFeedback("Add your Stripe publishable key to enable secure Stripe donations.", "warning");
+    }
+  })
+  .catch((error) => {
+    console.error("Unable to verify Stripe configuration", error);
+    showDonationFeedback(
+      "We couldn't load the Stripe publishable key. Check your server configuration before accepting donations.",
+      "error",
+    );
+  });
+
+maybeHandleStripeReturn().catch((error) => {
+  console.error("Stripe return handling failed", error);
+  showDonationFeedback(
+    "We couldn't verify your Stripe payment. Please contact us with your Stripe receipt.",
+    "error",
+  );
+});
 
 const initialData = new FormData(footprintForm);
 const { perPerson: initialPerPerson } = calculateFootprint(initialData);

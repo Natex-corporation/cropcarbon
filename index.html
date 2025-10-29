@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="stripe-publishable-key" content="pk_test_replace_with_live_key" />
   <title>CropCarbon Impact Portal</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -150,7 +151,11 @@
     <section class="card card--wide" aria-labelledby="donation-heading">
       <h2 id="donation-heading">Donate to Regenerative Projects</h2>
       <p>Choose your contribution amount and frequency. You&apos;ll see how your gift accelerates our goals in real time.</p>
-      <form id="donation-form" class="form-grid">
+      <form id="donation-form" class="form-grid" novalidate>
+        <label>
+          Your Name
+          <input type="text" id="donor-name" name="donor-name" placeholder="Jamie" autocomplete="name" />
+        </label>
         <label>
           Donation Amount ($)
           <input type="number" id="donation-amount" name="donation-amount" min="1" value="50" required />
@@ -176,6 +181,7 @@
         </label>
         <button type="submit" class="button">Contribute</button>
       </form>
+      <p id="donation-feedback" class="donation-feedback" role="status" aria-live="polite" hidden></p>
       <div class="donation-summary" aria-live="polite">
         <h3>Recent Contributions</h3>
         <ul id="donation-list"></ul>
@@ -188,6 +194,46 @@
             Raised: $<span data-field="raised"></span> • <span data-field="percent"></span>% of goal
           </div>
         </div>
+      </div>
+    </section>
+
+    <section class="card card--wide transparency" aria-labelledby="transparency-heading">
+      <div class="card__header">
+        <h2 id="transparency-heading">How Your Support Flows</h2>
+        <span class="tag">Built for trust</span>
+      </div>
+      <p class="card__lede">
+        Every contribution is routed through secure Stripe payments and then allocated across project deployment, farmer
+        training, and verification so you always know what&apos;s next.
+      </p>
+      <div class="transparency__grid">
+        <article class="transparency__item">
+          <h3>Project Deployment</h3>
+          <p>Infrastructure, equipment, and on-site teams transforming landscapes within 60 days of funding.</p>
+          <ul>
+            <li>Soil and biomass restoration</li>
+            <li>Water management upgrades</li>
+            <li>Community stewardship stipends</li>
+          </ul>
+        </article>
+        <article class="transparency__item">
+          <h3>Farmer Capability</h3>
+          <p>Scholarships and coaching for growers to operate, measure, and own each regenerative asset.</p>
+          <ul>
+            <li>Field schools &amp; peer networks</li>
+            <li>Monitoring + reporting toolkits</li>
+            <li>Market access acceleration</li>
+          </ul>
+        </article>
+        <article class="transparency__item">
+          <h3>Verification &amp; Reporting</h3>
+          <p>Carbon accounting, third-party audits, and open dashboards that broadcast outcomes to every donor.</p>
+          <ul>
+            <li>Soil carbon sampling</li>
+            <li>Remote sensing and MRV</li>
+            <li>Impact storytelling</li>
+          </ul>
+        </article>
       </div>
     </section>
   </main>
@@ -280,6 +326,7 @@
   </aside>
   <div id="admin-backdrop" class="admin-backdrop" hidden></div>
 
+  <script src="https://js.stripe.com/v3/"></script>
   <script src="app.js"></script>
 </body>
 </html>
