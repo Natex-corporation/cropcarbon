@@ -1,3 +1,5 @@
+const STORAGE_KEY = "cropcarbon-portal-state-v2";
+
 const emissionFactors = {
   electricity: 0.000417, // metric tons CO2e per kWh
   carMile: 0.000404, // average passenger vehicle
@@ -10,36 +12,61 @@ const emissionFactors = {
   },
 };
 
-const campaign = {
-  goal: 72000,
-  raised: 28650,
-  projects: [
-    {
-      title: "Biochar Kiln Cooperative",
-      description: "Community-owned kilns turning farm waste into carbon-rich biochar that restores depleted soils.",
-      impact: "Reduces 1,200 tons of CO₂e annually while boosting yields by up to 18%.",
-    },
-    {
-      title: "Agroforestry Farmer Grants",
-      description: "Microgrants and training that help smallholders plant shade trees and diversify their crops.",
-      impact: "Plants 45,000 trees and creates new habitat corridors across 300 hectares.",
-    },
-    {
-      title: "Soil Carbon Verification Lab",
-      description: "Mobile lab services validating soil carbon gains so farmers can access premium carbon markets.",
-      impact: "Cuts verification costs by 60% and unlocks $1.2M in annual farmer income.",
-    },
-  ],
-};
-
 const statusConfig = {
   active: { label: "Raising Now", badge: "status--active" },
   upcoming: { label: "Coming Soon", badge: "status--upcoming" },
   complete: { label: "Funded", badge: "status--complete" },
 };
 
-let updateIdCounter = 4;
-let updates = [
+const seededProjects = [
+  {
+    id: "project-1",
+    title: "Biochar Kiln Cooperative",
+    region: "Embu, Kenya",
+    focus: "Soil carbon & biochar",
+    summary:
+      "Community kilns transform crop waste into biochar, locking carbon in the ground while boosting yields.",
+    hectares: 160,
+    farmers: 48,
+    carbon: 920,
+    raised: 18750,
+    goal: 32000,
+    status: "active",
+    timeline: "Construction crews on-site",
+  },
+  {
+    id: "project-2",
+    title: "Agroforestry Farmer Grants",
+    region: "Atlántico, Colombia",
+    focus: "Shade-grown agroforestry",
+    summary:
+      "Microgrants and field schools help farmers interplant cacao, timber, and nitrogen-fixing trees for living carbon banks.",
+    hectares: 300,
+    farmers: 72,
+    carbon: 1460,
+    raised: 9200,
+    goal: 28000,
+    status: "upcoming",
+    timeline: "Training cohort forming",
+  },
+  {
+    id: "project-3",
+    title: "Soil Carbon Verification Lab",
+    region: "Kisumu, Kenya",
+    focus: "MRV & soil labs",
+    summary:
+      "A mobile lab validates farmer soil samples so cooperatives can access premium carbon markets and regenerative premiums.",
+    hectares: 210,
+    farmers: 96,
+    carbon: 1250,
+    raised: 7200,
+    goal: 12000,
+    status: "complete",
+    timeline: "Equipment installed and calibrated",
+  },
+];
+
+const seededUpdates = [
   {
     id: "update-1",
     title: "Sabana River Wetland Revival",
@@ -52,7 +79,7 @@ let updates = [
     status: "active",
     summary:
       "Rehydrating drained paddies so native reeds can return, creating wildlife nurseries and income from regenerative rice.",
-    updatedAt: new Date("2024-05-18"),
+    updatedAt: "2024-05-18T00:00:00.000Z",
   },
   {
     id: "update-2",
@@ -66,7 +93,7 @@ let updates = [
     status: "upcoming",
     summary:
       "Designing tree corridors to shield soil from erosion while co-locating pollinator strips for prairie restoration.",
-    updatedAt: new Date("2024-04-30"),
+    updatedAt: "2024-04-30T00:00:00.000Z",
   },
   {
     id: "update-3",
@@ -80,26 +107,185 @@ let updates = [
     status: "complete",
     summary:
       "Local youth collect propagules at dawn and have already replanted 48,000 mangroves to buffer villages from storms.",
-    updatedAt: new Date("2024-03-22"),
+    updatedAt: "2024-03-22T00:00:00.000Z",
   },
 ];
 
-const donations = [
+const seededDonations = [
   {
     name: "Ava R.",
     amount: 250,
     frequency: "monthly",
     message: "Excited to support the soil lab rollout!",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24),
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
   },
   {
     name: "GreenSeed Ventures",
     amount: 5000,
     frequency: "once",
     message: "Matching gifts all week.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5),
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
   },
 ];
+
+function toValidDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function cloneProjects(projects = seededProjects) {
+  return projects.map((project, index) => ({
+    id: project.id || `project-${index + 1}`,
+    title: project.title,
+    region: project.region,
+    focus: project.focus,
+    summary: project.summary,
+    hectares: Number(project.hectares) || 0,
+    farmers: Number(project.farmers) || 0,
+    carbon: Number(project.carbon) || 0,
+    raised: Number(project.raised) || 0,
+    goal: Number(project.goal) || 0,
+    status: project.status || "active",
+    timeline: project.timeline || "",
+  }));
+}
+
+function cloneUpdates(updates = seededUpdates) {
+  return updates.map((update, index) => ({
+    id: update.id || `update-${index + 1}`,
+    title: update.title,
+    location: update.location,
+    hectares: Number(update.hectares) || 0,
+    farmers: Number(update.farmers) || 0,
+    carbon: Number(update.carbon) || 0,
+    raised: Number(update.raised) || 0,
+    goal: Number(update.goal) || 0,
+    status: update.status || "active",
+    summary: update.summary,
+    updatedAt: toValidDate(update.updatedAt),
+  }));
+}
+
+function cloneDonations(donations = seededDonations) {
+  return donations.map((donation) => ({
+    name: donation.name,
+    amount: Number(donation.amount) || 0,
+    frequency: donation.frequency || "once",
+    message: donation.message || "",
+    timestamp: toValidDate(donation.timestamp),
+  }));
+}
+
+function createDefaultState() {
+  return {
+    campaign: {
+      goal: 72000,
+      raised: 28650,
+      projects: cloneProjects(),
+    },
+    updates: cloneUpdates(),
+    donations: cloneDonations(),
+    meta: {
+      updateCounter: seededUpdates.length + 1,
+    },
+  };
+}
+
+function getStorage() {
+  if (typeof window === "undefined" || !("localStorage" in window)) {
+    return null;
+  }
+  try {
+    const testKey = "__cropcarbon_test__";
+    window.localStorage.setItem(testKey, "test");
+    window.localStorage.removeItem(testKey);
+    return window.localStorage;
+  } catch (error) {
+    console.warn("Local storage unavailable", error);
+    return null;
+  }
+}
+
+const storage = getStorage();
+
+function hydrateState(stored) {
+  const base = createDefaultState();
+  if (!stored || typeof stored !== "object") {
+    return base;
+  }
+
+  const campaign = stored.campaign || {};
+  const updates = Array.isArray(stored.updates) ? stored.updates : [];
+  const donations = Array.isArray(stored.donations) ? stored.donations : [];
+  const meta = stored.meta || {};
+
+  return {
+    campaign: {
+      goal: Number(campaign.goal) || base.campaign.goal,
+      raised: Number(campaign.raised) || base.campaign.raised,
+      projects: base.campaign.projects,
+    },
+    updates: updates.length ? cloneUpdates(updates) : base.updates,
+    donations: donations.length ? cloneDonations(donations) : base.donations,
+    meta: {
+      updateCounter: Number(meta.updateCounter) || base.meta.updateCounter,
+    },
+  };
+}
+
+function loadState() {
+  const base = createDefaultState();
+  if (!storage) {
+    return base;
+  }
+
+  const raw = storage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return base;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return hydrateState(parsed);
+  } catch (error) {
+    console.warn("Failed to parse stored state", error);
+    return base;
+  }
+}
+
+let state = loadState();
+state.meta.updateCounter = Math.max(state.meta.updateCounter || 1, state.updates.length + 1);
+
+function persistState() {
+  if (!storage) {
+    return;
+  }
+
+  const serialisable = {
+    campaign: {
+      goal: state.campaign.goal,
+      raised: state.campaign.raised,
+      projects: state.campaign.projects,
+    },
+    updates: state.updates.map((update) => ({
+      ...update,
+      updatedAt: update.updatedAt.toISOString(),
+    })),
+    donations: state.donations.map((donation) => ({
+      ...donation,
+      timestamp: donation.timestamp.toISOString(),
+    })),
+    meta: {
+      updateCounter: state.meta.updateCounter,
+    },
+  };
+
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(serialisable));
+  } catch (error) {
+    console.warn("Failed to persist state", error);
+  }
+}
 
 const footprintForm = document.getElementById("footprint-form");
 const resultEl = document.querySelector("#footprint-result [data-field='total']");
@@ -114,6 +300,15 @@ const updatesGrid = document.getElementById("updates-grid");
 const statHectares = document.querySelector("[data-stat='hectares']");
 const statFarmers = document.querySelector("[data-stat='farmers']");
 const statCarbon = document.querySelector("[data-stat='carbon']");
+
+const campaignMetrics = {
+  active: document.querySelector("[data-campaign-metric='active']"),
+  upcoming: document.querySelector("[data-campaign-metric='upcoming']"),
+  complete: document.querySelector("[data-campaign-metric='complete']"),
+  carbon: document.querySelector("[data-campaign-metric='carbon']"),
+  hectares: document.querySelector("[data-campaign-metric='hectares']"),
+  farmers: document.querySelector("[data-campaign-metric='farmers']"),
+};
 
 const adminToggle = document.getElementById("admin-toggle");
 const adminPanel = document.getElementById("admin-panel");
@@ -149,7 +344,7 @@ function escapeHtml(value) {
 
 function formatRelativeTime(date) {
   const diff = Date.now() - date.getTime();
-  const minutes = Math.round(diff / 60000);
+  const minutes = Math.max(Math.round(diff / 60000), 0);
   if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
@@ -201,7 +396,7 @@ function updateFootprintDisplay(perPerson) {
 }
 
 function updateImpactStats() {
-  const totals = updates.reduce(
+  const totals = state.updates.reduce(
     (acc, item) => {
       acc.hectares += Number(item.hectares) || 0;
       acc.farmers += Number(item.farmers) || 0;
@@ -216,27 +411,107 @@ function updateImpactStats() {
   statCarbon.textContent = formatNumber(totals.carbon);
 }
 
+function updateCampaignOverview() {
+  const summary = state.campaign.projects.reduce(
+    (acc, project) => {
+      const statusKey =
+        project.status && Object.prototype.hasOwnProperty.call(acc.counts, project.status) ? project.status : "active";
+      acc.counts[statusKey] += 1;
+      acc.totals.hectares += Number(project.hectares) || 0;
+      acc.totals.farmers += Number(project.farmers) || 0;
+      acc.totals.carbon += Number(project.carbon) || 0;
+      return acc;
+    },
+    {
+      counts: { active: 0, upcoming: 0, complete: 0 },
+      totals: { hectares: 0, farmers: 0, carbon: 0 },
+    }
+  );
+
+  if (campaignMetrics.active) {
+    campaignMetrics.active.textContent = formatNumber(summary.counts.active);
+  }
+  if (campaignMetrics.upcoming) {
+    campaignMetrics.upcoming.textContent = formatNumber(summary.counts.upcoming);
+  }
+  if (campaignMetrics.complete) {
+    campaignMetrics.complete.textContent = formatNumber(summary.counts.complete);
+  }
+  if (campaignMetrics.hectares) {
+    campaignMetrics.hectares.textContent = formatNumber(summary.totals.hectares, { maximumFractionDigits: 0 });
+  }
+  if (campaignMetrics.farmers) {
+    campaignMetrics.farmers.textContent = formatNumber(summary.totals.farmers);
+  }
+  if (campaignMetrics.carbon) {
+    campaignMetrics.carbon.textContent = formatNumber(summary.totals.carbon, { maximumFractionDigits: 0 });
+  }
+}
+
 function renderCampaignPanel() {
   campaignPanel.innerHTML = "";
-  campaign.projects.forEach((project) => {
-    const item = document.createElement("article");
-    item.className = "campaign-item";
-    item.innerHTML = `
-      <h3>${escapeHtml(project.title)}</h3>
-      <p>${escapeHtml(project.description)}</p>
-      <p><strong>Impact:</strong> ${escapeHtml(project.impact)}</p>
-    `;
-    campaignPanel.appendChild(item);
-  });
+  const statusOrder = { active: 0, upcoming: 1, complete: 2 };
+
+  state.campaign.projects
+    .slice()
+    .sort((a, b) => {
+      const statusDiff = (statusOrder[a.status] ?? 0) - (statusOrder[b.status] ?? 0);
+      if (statusDiff !== 0) return statusDiff;
+      return (b.raised / (b.goal || 1)) - (a.raised / (a.goal || 1));
+    })
+    .forEach((project) => {
+      const percent = project.goal ? Math.min(Math.round((Number(project.raised) / Number(project.goal)) * 100), 999) : null;
+      const item = document.createElement("article");
+      item.className = `campaign-item ${statusConfig[project.status]?.badge ?? ""}`.trim();
+      item.setAttribute("role", "listitem");
+      item.innerHTML = `
+        <header class="campaign-item__header">
+          <div>
+            <p class="campaign-item__eyebrow">${escapeHtml(project.region)}</p>
+            <h3>${escapeHtml(project.title)}</h3>
+            <p class="campaign-item__focus">${escapeHtml(project.focus)}</p>
+          </div>
+          <span class="pill">${escapeHtml(statusConfig[project.status]?.label ?? "Project")}</span>
+        </header>
+        <p class="campaign-item__summary">${escapeHtml(project.summary)}</p>
+        <dl class="campaign-item__metrics">
+          <div>
+            <dt>Hectares</dt>
+            <dd>${formatNumber(Number(project.hectares) || 0)}</dd>
+          </div>
+          <div>
+            <dt>Farmers</dt>
+            <dd>${formatNumber(Number(project.farmers) || 0)}</dd>
+          </div>
+          <div>
+            <dt>Carbon</dt>
+            <dd>${formatNumber(Number(project.carbon) || 0)} t</dd>
+          </div>
+        </dl>
+        <div class="campaign-item__footer">
+          <div class="progress progress--inline">
+            <div class="progress__label">Raised ${formatCurrency(Number(project.raised) || 0)} of ${formatCurrency(Number(project.goal) || 0)}</div>
+            <div class="progress__bar">
+              <div class="progress__fill" style="width: ${percent !== null ? Math.min(percent, 100) : 0}%"></div>
+            </div>
+            <span class="progress__percent">${percent !== null ? `${percent}% funded` : ""}</span>
+          </div>
+          <p class="campaign-item__timeline">${escapeHtml(project.timeline)}</p>
+        </div>
+      `;
+      campaignPanel.appendChild(item);
+    });
+
+  updateCampaignOverview();
 }
 
 function renderUpdates() {
   updatesGrid.innerHTML = "";
   const statusOrder = { active: 0, upcoming: 1, complete: 2 };
-  updates
+  state.updates
     .slice()
     .sort((a, b) => {
-      const statusDiff = statusOrder[a.status] - statusOrder[b.status];
+      const statusDiff = (statusOrder[a.status] ?? 0) - (statusOrder[b.status] ?? 0);
       if (statusDiff !== 0) return statusDiff;
       return b.updatedAt.getTime() - a.updatedAt.getTime();
     })
@@ -245,7 +520,8 @@ function renderUpdates() {
         ? Math.min(Math.round((Number(update.raised) / Number(update.goal)) * 100), 999)
         : null;
       const card = document.createElement("article");
-      card.className = `update-card ${statusConfig[update.status]?.badge ?? ""}`;
+      card.className = `update-card ${statusConfig[update.status]?.badge ?? ""}`.trim();
+      card.setAttribute("role", "listitem");
       card.innerHTML = `
         <header class="update-card__header">
           <div>
@@ -286,7 +562,7 @@ function renderUpdates() {
 
 function renderAdminUpdates() {
   adminUpdatesList.innerHTML = "";
-  updates.forEach((update) => {
+  state.updates.forEach((update) => {
     const li = document.createElement("li");
     li.className = `admin-updates__item ${statusConfig[update.status]?.badge ?? ""}`.trim();
     li.dataset.id = update.id;
@@ -295,6 +571,10 @@ function renderAdminUpdates() {
         <h4>${escapeHtml(update.title)}</h4>
         <span class="pill">${escapeHtml(statusConfig[update.status]?.label ?? "Update")}</span>
       </div>
+      <label>
+        Location
+        <input type="text" class="admin-update-location" value="${escapeHtml(update.location)}" />
+      </label>
       <label>
         Status
         <select class="admin-status-select">
@@ -306,6 +586,20 @@ function renderAdminUpdates() {
             .join("")}
         </select>
       </label>
+      <div class="admin-form__grid admin-form__grid--metrics">
+        <label>
+          Hectares
+          <input type="number" class="admin-update-hectares" min="0" step="0.1" value="${Number(update.hectares) || 0}" />
+        </label>
+        <label>
+          Farmers
+          <input type="number" class="admin-update-farmers" min="0" step="1" value="${Number(update.farmers) || 0}" />
+        </label>
+        <label>
+          Carbon (t)
+          <input type="number" class="admin-update-carbon" min="0" step="1" value="${Number(update.carbon) || 0}" />
+        </label>
+      </div>
       <div class="admin-form__grid">
         <label>
           Raised ($)
@@ -362,7 +656,7 @@ function handleGlobalKeyDown(event) {
 
 function renderDonations() {
   donationList.innerHTML = "";
-  donations
+  state.donations
     .slice()
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
     .slice(0, 6)
@@ -381,14 +675,14 @@ function renderDonations() {
       donationList.appendChild(li);
     });
 
-  goalField.textContent = campaign.goal.toLocaleString();
-  raisedField.textContent = campaign.raised.toLocaleString();
-  const percentRaw = campaign.goal > 0 ? (campaign.raised / campaign.goal) * 100 : 100;
+  goalField.textContent = state.campaign.goal.toLocaleString();
+  raisedField.textContent = state.campaign.raised.toLocaleString();
+  const percentRaw = state.campaign.goal > 0 ? (state.campaign.raised / state.campaign.goal) * 100 : 100;
   const percent = Math.min(Math.round(percentRaw), 999);
   percentField.textContent = percent.toString();
   progressFill.style.width = `${Math.min(percent, 100)}%`;
-  adminGoalInput.value = campaign.goal.toString();
-  adminRaisedInput.value = campaign.raised.toString();
+  adminGoalInput.value = state.campaign.goal.toString();
+  adminRaisedInput.value = state.campaign.raised.toString();
 }
 
 function handleFootprintSubmit(event) {
@@ -405,7 +699,7 @@ function handleDonationSubmit(event) {
   const frequency = formData.get("frequency") || "once";
   const message = formData.get("donor-message")?.trim();
 
-  donations.unshift({
+  state.donations.unshift({
     name: "You",
     amount,
     frequency,
@@ -413,13 +707,13 @@ function handleDonationSubmit(event) {
     timestamp: new Date(),
   });
 
-  // Adjust campaign totals based on frequency to show extended impact
-  const multiplier = frequency === "monthly" ? 12 : frequency === "annual" ? 1 : 1;
-  campaign.raised += amount * multiplier;
+  const multiplier = frequency === "monthly" ? 12 : 1;
+  state.campaign.raised += amount * multiplier;
 
   donationForm.reset();
   donationForm.querySelector("input[name='frequency'][value='once']").checked = true;
 
+  persistState();
   renderDonations();
 }
 
@@ -428,8 +722,9 @@ function handleCampaignFormSubmit(event) {
   const goal = Math.max(Number(adminGoalInput.value) || 0, 0);
   const raised = Math.max(Number(adminRaisedInput.value) || 0, 0);
 
-  campaign.goal = goal;
-  campaign.raised = raised;
+  state.campaign.goal = goal;
+  state.campaign.raised = raised;
+  persistState();
   renderDonations();
   showAdminMessage("Campaign totals updated.");
 }
@@ -452,8 +747,8 @@ function handleUpdateFormSubmit(event) {
     return;
   }
 
-  const id = `update-${updateIdCounter++}`;
-  updates.unshift({
+  const id = `update-${state.meta.updateCounter++}`;
+  state.updates.unshift({
     id,
     title,
     location,
@@ -468,6 +763,7 @@ function handleUpdateFormSubmit(event) {
   });
 
   adminUpdateForm.reset();
+  persistState();
   renderUpdates();
   renderAdminUpdates();
   showAdminMessage("New field update published.");
@@ -477,7 +773,7 @@ function handleAdminUpdatesInteraction(event) {
   const item = event.target.closest(".admin-updates__item");
   if (!item) return;
   const id = item.dataset.id;
-  const update = updates.find((entry) => entry.id === id);
+  const update = state.updates.find((entry) => entry.id === id);
   if (!update) return;
 
   if (event.target.classList.contains("admin-save")) {
@@ -485,20 +781,30 @@ function handleAdminUpdatesInteraction(event) {
     const raisedInput = item.querySelector(".admin-update-raised");
     const goalInput = item.querySelector(".admin-update-goal");
     const summaryInput = item.querySelector(".admin-update-summary");
+    const locationInput = item.querySelector(".admin-update-location");
+    const hectaresInput = item.querySelector(".admin-update-hectares");
+    const farmersInput = item.querySelector(".admin-update-farmers");
+    const carbonInput = item.querySelector(".admin-update-carbon");
 
     update.status = statusSelect?.value ?? update.status;
     update.raised = Number(raisedInput?.value) || 0;
     update.goal = Number(goalInput?.value) || 0;
     update.summary = summaryInput?.value?.trim() || update.summary;
+    update.location = locationInput?.value?.trim() || update.location;
+    update.hectares = Number(hectaresInput?.value) || 0;
+    update.farmers = Number(farmersInput?.value) || 0;
+    update.carbon = Number(carbonInput?.value) || 0;
     update.updatedAt = new Date();
 
+    persistState();
     renderUpdates();
     renderAdminUpdates();
     showAdminMessage("Update saved.");
   }
 
   if (event.target.classList.contains("admin-delete")) {
-    updates = updates.filter((entry) => entry.id !== id);
+    state.updates = state.updates.filter((entry) => entry.id !== id);
+    persistState();
     renderUpdates();
     renderAdminUpdates();
     showAdminMessage("Update removed.", "warning");
@@ -506,8 +812,8 @@ function handleAdminUpdatesInteraction(event) {
 }
 
 function initializeAdminForms() {
-  adminGoalInput.value = campaign.goal.toString();
-  adminRaisedInput.value = campaign.raised.toString();
+  adminGoalInput.value = state.campaign.goal.toString();
+  adminRaisedInput.value = state.campaign.raised.toString();
   renderAdminUpdates();
 }
 

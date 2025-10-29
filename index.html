@@ -93,7 +93,46 @@
         <h2 id="fundraising-heading">What Your Donation Supports</h2>
         <span class="tag">Campaign Progress</span>
       </div>
-      <div id="campaign-panel" class="campaign-panel" aria-live="polite"></div>
+      <p class="card__lede">
+        Explore the regenerative infrastructure your gifts activate. Each landscape shows the hectares we are
+        restoring, the farmers we accompany, and the carbon we expect to sequester.
+      </p>
+      <div class="campaign-overview">
+        <dl class="campaign-overview__metrics" aria-label="Portfolio summary">
+          <div>
+            <dt>Active landscapes</dt>
+            <dd><span data-campaign-metric="active">0</span></dd>
+          </div>
+          <div>
+            <dt>Preparing</dt>
+            <dd><span data-campaign-metric="upcoming">0</span></dd>
+          </div>
+          <div>
+            <dt>Funded</dt>
+            <dd><span data-campaign-metric="complete">0</span></dd>
+          </div>
+          <div>
+            <dt>Carbon impact</dt>
+            <dd><span data-campaign-metric="carbon">0</span> tCO₂e</dd>
+          </div>
+          <div>
+            <dt>Hectares covered</dt>
+            <dd><span data-campaign-metric="hectares">0</span> ha</dd>
+          </div>
+          <div>
+            <dt>Farmers involved</dt>
+            <dd><span data-campaign-metric="farmers">0</span></dd>
+          </div>
+        </dl>
+        <aside class="campaign-overview__callout" aria-label="Funding promise">
+          <h3>Every dollar works twice</h3>
+          <p>
+            We pair soil health finance with farmer training so communities can steward carbon projects long after the
+            fundraising campaign ends.
+          </p>
+        </aside>
+      </div>
+      <div id="campaign-panel" class="campaign-panel" aria-live="polite" role="list"></div>
     </section>
 
     <section class="card" aria-labelledby="updates-heading">
@@ -105,7 +144,7 @@
         Follow the farms, wetlands, and agroforestry sites your gifts make possible. Each post shows what&apos;s live,
         coming soon, or already thriving thanks to CropCarbon supporters.
       </p>
-      <div id="updates-grid" class="updates-grid" aria-live="polite"></div>
+      <div id="updates-grid" class="updates-grid" aria-live="polite" role="list"></div>
     </section>
 
     <section class="card" aria-labelledby="donation-heading">
