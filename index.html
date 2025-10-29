@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CropCarbon Impact Portal</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__content">
+      <h1>CropCarbon Impact Portal</h1>
+      <p>Calculate your carbon footprint, explore the projects you power, and contribute to regenerative agriculture.</p>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="card" aria-labelledby="calculator-heading">
+      <h2 id="calculator-heading">Personal Carbon Footprint Calculator</h2>
+      <p>Estimate your annual footprint using typical household activities. Adjust the sliders to match your lifestyle.</p>
+      <form id="footprint-form" class="form-grid">
+        <label>
+          Monthly Electricity Usage (kWh)
+          <input type="number" id="electricity" name="electricity" min="0" value="350" required />
+        </label>
+        <label>
+          Weekly Car Travel (miles)
+          <input type="number" id="car-miles" name="car-miles" min="0" value="120" required />
+        </label>
+        <label>
+          Weekly Public Transit (miles)
+          <input type="number" id="transit-miles" name="transit-miles" min="0" value="40" required />
+        </label>
+        <label>
+          Weekly Flights (hours)
+          <input type="number" id="flight-hours" name="flight-hours" min="0" value="0" required />
+        </label>
+        <label>
+          Diet Type
+          <select id="diet" name="diet">
+            <option value="omnivore">Omnivore</option>
+            <option value="vegetarian">Vegetarian</option>
+            <option value="vegan">Vegan</option>
+          </select>
+        </label>
+        <label>
+          Household Size
+          <input type="number" id="household" name="household" min="1" value="2" required />
+        </label>
+        <button type="submit" class="button">Calculate Footprint</button>
+      </form>
+      <output id="footprint-result" class="result" aria-live="polite">
+        Your estimated annual footprint is <span data-field="total">—</span> tons of CO₂e per person.
+      </output>
+      <p class="result__note">Numbers are derived from EPA and DEFRA conversion factors for illustrative purposes.</p>
+    </section>
+
+    <section class="card" aria-labelledby="fundraising-heading">
+      <div class="card__header">
+        <h2 id="fundraising-heading">What Your Donation Supports</h2>
+        <span class="tag">Campaign Progress</span>
+      </div>
+      <div id="campaign-panel" class="campaign-panel" aria-live="polite"></div>
+    </section>
+
+    <section class="card" aria-labelledby="donation-heading">
+      <h2 id="donation-heading">Donate to Regenerative Projects</h2>
+      <p>Choose your contribution amount and frequency. You&apos;ll see how your gift accelerates our goals in real time.</p>
+      <form id="donation-form" class="form-grid">
+        <label>
+          Donation Amount ($)
+          <input type="number" id="donation-amount" name="donation-amount" min="1" value="50" required />
+        </label>
+        <fieldset class="radio-group">
+          <legend>Frequency</legend>
+          <label>
+            <input type="radio" name="frequency" value="once" checked />
+            One-time
+          </label>
+          <label>
+            <input type="radio" name="frequency" value="monthly" />
+            Monthly
+          </label>
+          <label>
+            <input type="radio" name="frequency" value="annual" />
+            Annual
+          </label>
+        </fieldset>
+        <label>
+          Add Message (optional)
+          <textarea id="donor-message" name="donor-message" rows="3" placeholder="Share why you care..."></textarea>
+        </label>
+        <button type="submit" class="button">Contribute</button>
+      </form>
+      <div class="donation-summary" aria-live="polite">
+        <h3>Recent Contributions</h3>
+        <ul id="donation-list"></ul>
+        <div class="progress">
+          <div class="progress__label">Campaign Goal: $<span data-field="goal"></span></div>
+          <div class="progress__bar">
+            <div class="progress__fill" data-field="progress" style="width: 0%"></div>
+          </div>
+          <div class="progress__totals">
+            Raised: $<span data-field="raised"></span> • <span data-field="percent"></span>% of goal
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <small>&copy; <span id="year"></span> CropCarbon. Growing climate resilience together.</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
