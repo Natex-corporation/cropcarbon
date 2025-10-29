@@ -8,13 +8,46 @@
 </head>
 <body>
   <header class="hero">
+    <nav class="hero__nav" aria-label="Utility">
+      <span class="logo">CropCarbon</span>
+      <button id="admin-toggle" class="button button--ghost" type="button" aria-controls="admin-panel">Open Admin</button>
+    </nav>
     <div class="hero__content">
-      <h1>CropCarbon Impact Portal</h1>
-      <p>Calculate your carbon footprint, explore the projects you power, and contribute to regenerative agriculture.</p>
+      <p class="eyebrow">Regenerative Giving Hub</p>
+      <h1>See the land you&apos;re restoring and the people you&apos;re supporting.</h1>
+      <p>
+        Calculate your footprint, follow field updates in real time, and fuel the projects that pull carbon from the air
+        back into the soil.
+      </p>
+      <div class="hero__cta">
+        <a href="#donation-heading" class="button button--accent">Donate Now</a>
+        <a href="#calculator-heading" class="button button--ghost">Calculate Footprint</a>
+      </div>
     </div>
   </header>
 
   <main class="layout">
+    <section class="card highlights" aria-labelledby="impact-heading">
+      <div class="card__header">
+        <h2 id="impact-heading">Impact at a Glance</h2>
+        <span class="tag">Live metrics</span>
+      </div>
+      <div class="stat-grid">
+        <article class="stat-card">
+          <span class="stat-card__label">Hectares transitioning</span>
+          <span class="stat-card__value"><span data-stat="hectares">0</span> ha</span>
+        </article>
+        <article class="stat-card">
+          <span class="stat-card__label">Farmers backed</span>
+          <span class="stat-card__value" data-stat="farmers">0</span>
+        </article>
+        <article class="stat-card">
+          <span class="stat-card__label">Carbon stored</span>
+          <span class="stat-card__value"><span data-stat="carbon">0</span> tCO₂e</span>
+        </article>
+      </div>
+    </section>
+
     <section class="card" aria-labelledby="calculator-heading">
       <h2 id="calculator-heading">Personal Carbon Footprint Calculator</h2>
       <p>Estimate your annual footprint using typical household activities. Adjust the sliders to match your lifestyle.</p>
@@ -61,6 +94,18 @@
         <span class="tag">Campaign Progress</span>
       </div>
       <div id="campaign-panel" class="campaign-panel" aria-live="polite"></div>
+    </section>
+
+    <section class="card" aria-labelledby="updates-heading">
+      <div class="card__header">
+        <h2 id="updates-heading">Field Dispatches</h2>
+        <span class="tag">From the ground</span>
+      </div>
+      <p class="card__lede">
+        Follow the farms, wetlands, and agroforestry sites your gifts make possible. Each post shows what&apos;s live,
+        coming soon, or already thriving thanks to CropCarbon supporters.
+      </p>
+      <div id="updates-grid" class="updates-grid" aria-live="polite"></div>
     </section>
 
     <section class="card" aria-labelledby="donation-heading">
@@ -111,6 +156,90 @@
   <footer class="footer">
     <small>&copy; <span id="year"></span> CropCarbon. Growing climate resilience together.</small>
   </footer>
+
+  <aside id="admin-panel" class="admin-panel" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="admin-panel-title" tabindex="-1">
+    <div class="admin-panel__header">
+      <h2 id="admin-panel-title">CropCarbon Admin Console</h2>
+      <button id="admin-close" class="icon-button" type="button" aria-label="Close admin panel">&times;</button>
+    </div>
+    <p class="admin-panel__intro">
+      Adjust campaign totals, post new land updates, and fine-tune the stories visitors see. All changes preview instantly
+      on the public portal.
+    </p>
+    <p id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></p>
+
+    <section class="admin-section">
+      <h3>Campaign Totals</h3>
+      <form id="admin-campaign-form" class="admin-form">
+        <label>
+          Campaign goal ($)
+          <input id="admin-goal" name="goal" type="number" min="0" step="100" required />
+        </label>
+        <label>
+          Raised so far ($)
+          <input id="admin-raised" name="raised" type="number" min="0" step="100" required />
+        </label>
+        <button type="submit" class="button">Update Totals</button>
+      </form>
+    </section>
+
+    <section class="admin-section">
+      <h3>New Field Update</h3>
+      <form id="admin-update-form" class="admin-form">
+        <label>
+          Title
+          <input name="title" type="text" placeholder="Kisumu Wetland Revival" required />
+        </label>
+        <label>
+          Location
+          <input name="location" type="text" placeholder="Kisumu, Kenya" required />
+        </label>
+        <label>
+          Status
+          <select name="status">
+            <option value="active">Raising Now</option>
+            <option value="upcoming">Coming Soon</option>
+            <option value="complete">Funded</option>
+          </select>
+        </label>
+        <div class="admin-form__grid">
+          <label>
+            Hectares impacted
+            <input name="hectares" type="number" min="0" step="0.1" placeholder="120" required />
+          </label>
+          <label>
+            Farmers involved
+            <input name="farmers" type="number" min="0" step="1" placeholder="48" required />
+          </label>
+          <label>
+            Carbon stored (tCO₂e)
+            <input name="carbon" type="number" min="0" step="1" placeholder="320" required />
+          </label>
+        </div>
+        <div class="admin-form__grid">
+          <label>
+            Raised ($)
+            <input name="raised" type="number" min="0" step="100" placeholder="18000" required />
+          </label>
+          <label>
+            Goal ($)
+            <input name="goal" type="number" min="0" step="100" placeholder="32000" required />
+          </label>
+        </div>
+        <label>
+          Summary
+          <textarea name="summary" rows="3" placeholder="Community-owned kilns turning waste into biochar." required></textarea>
+        </label>
+        <button type="submit" class="button">Publish Update</button>
+      </form>
+    </section>
+
+    <section class="admin-section">
+      <h3>Manage Posts</h3>
+      <ul id="admin-updates-list" class="admin-updates"></ul>
+    </section>
+  </aside>
+  <div id="admin-backdrop" class="admin-backdrop" hidden></div>
 
   <script src="app.js"></script>
 </body>
