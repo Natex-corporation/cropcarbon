@@ -33,6 +33,8 @@ const seededProjects = [
     goal: 32000,
     status: "active",
     timeline: "Construction crews on-site",
+    image:
+      "https://images.unsplash.com/photo-1549880338-65ddcdfd017b?auto=format&fit=crop&w=1200&q=80",
   },
   {
     id: "project-2",
@@ -48,6 +50,8 @@ const seededProjects = [
     goal: 28000,
     status: "upcoming",
     timeline: "Training cohort forming",
+    image:
+      "https://images.unsplash.com/photo-1558002038-1055907df827?auto=format&fit=crop&w=1200&q=80",
   },
   {
     id: "project-3",
@@ -63,6 +67,8 @@ const seededProjects = [
     goal: 12000,
     status: "complete",
     timeline: "Equipment installed and calibrated",
+    image:
+      "https://images.unsplash.com/photo-1470246973918-29a93221c455?auto=format&fit=crop&w=1200&q=80",
   },
 ];
 
@@ -147,6 +153,7 @@ function cloneProjects(projects = seededProjects) {
     goal: Number(project.goal) || 0,
     status: project.status || "active",
     timeline: project.timeline || "",
+    image: project.image || "",
   }));
 }
 
@@ -342,6 +349,26 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function toSafeImageUrl(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const base = typeof window !== "undefined" && window.location ? window.location.origin : "https://example.com";
+  try {
+    const url = new URL(trimmed, base);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.href;
+    }
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
 function formatRelativeTime(date) {
   const diff = Date.now() - date.getTime();
   const minutes = Math.max(Math.round(diff / 60000), 0);
@@ -464,41 +491,98 @@ function renderCampaignPanel() {
       const item = document.createElement("article");
       item.className = `campaign-item ${statusConfig[project.status]?.badge ?? ""}`.trim();
       item.setAttribute("role", "listitem");
-      item.innerHTML = `
-        <header class="campaign-item__header">
-          <div>
-            <p class="campaign-item__eyebrow">${escapeHtml(project.region)}</p>
-            <h3>${escapeHtml(project.title)}</h3>
-            <p class="campaign-item__focus">${escapeHtml(project.focus)}</p>
-          </div>
-          <span class="pill">${escapeHtml(statusConfig[project.status]?.label ?? "Project")}</span>
-        </header>
-        <p class="campaign-item__summary">${escapeHtml(project.summary)}</p>
-        <dl class="campaign-item__metrics">
-          <div>
-            <dt>Hectares</dt>
-            <dd>${formatNumber(Number(project.hectares) || 0)}</dd>
-          </div>
-          <div>
-            <dt>Farmers</dt>
-            <dd>${formatNumber(Number(project.farmers) || 0)}</dd>
-          </div>
-          <div>
-            <dt>Carbon</dt>
-            <dd>${formatNumber(Number(project.carbon) || 0)} t</dd>
-          </div>
-        </dl>
-        <div class="campaign-item__footer">
-          <div class="progress progress--inline">
-            <div class="progress__label">Raised ${formatCurrency(Number(project.raised) || 0)} of ${formatCurrency(Number(project.goal) || 0)}</div>
-            <div class="progress__bar">
-              <div class="progress__fill" style="width: ${percent !== null ? Math.min(percent, 100) : 0}%"></div>
-            </div>
-            <span class="progress__percent">${percent !== null ? `${percent}% funded` : ""}</span>
-          </div>
-          <p class="campaign-item__timeline">${escapeHtml(project.timeline)}</p>
-        </div>
-      `;
+
+      const media = document.createElement("figure");
+      media.className = "campaign-item__media";
+      const imageUrl = toSafeImageUrl(project.image);
+      if (imageUrl) {
+        const img = document.createElement("img");
+        img.src = imageUrl;
+        img.alt = `${project.title} landscape`;
+        img.loading = "lazy";
+        media.appendChild(img);
+      }
+      const statusBadge = document.createElement("figcaption");
+      statusBadge.className = "pill campaign-item__status";
+      statusBadge.textContent = statusConfig[project.status]?.label ?? "Project";
+      media.appendChild(statusBadge);
+      item.appendChild(media);
+
+      const header = document.createElement("header");
+      header.className = "campaign-item__header";
+      const headerText = document.createElement("div");
+
+      const eyebrow = document.createElement("p");
+      eyebrow.className = "campaign-item__eyebrow";
+      eyebrow.textContent = project.region;
+      headerText.appendChild(eyebrow);
+
+      const title = document.createElement("h3");
+      title.textContent = project.title;
+      headerText.appendChild(title);
+
+      const focus = document.createElement("p");
+      focus.className = "campaign-item__focus";
+      focus.textContent = project.focus;
+      headerText.appendChild(focus);
+
+      header.appendChild(headerText);
+      item.appendChild(header);
+
+      const summary = document.createElement("p");
+      summary.className = "campaign-item__summary";
+      summary.textContent = project.summary;
+      item.appendChild(summary);
+
+      const metrics = document.createElement("dl");
+      metrics.className = "campaign-item__metrics";
+      [
+        ["Hectares", formatNumber(Number(project.hectares) || 0)],
+        ["Farmers", formatNumber(Number(project.farmers) || 0)],
+        ["Carbon", `${formatNumber(Number(project.carbon) || 0)} t`],
+      ].forEach(([label, value]) => {
+        const block = document.createElement("div");
+        const dt = document.createElement("dt");
+        dt.textContent = label;
+        const dd = document.createElement("dd");
+        dd.textContent = value;
+        block.append(dt, dd);
+        metrics.appendChild(block);
+      });
+      item.appendChild(metrics);
+
+      const footer = document.createElement("div");
+      footer.className = "campaign-item__footer";
+
+      const progress = document.createElement("div");
+      progress.className = "progress progress--inline";
+      const progressLabel = document.createElement("div");
+      progressLabel.className = "progress__label";
+      progressLabel.textContent = `Raised ${formatCurrency(Number(project.raised) || 0)} of ${formatCurrency(Number(project.goal) || 0)}`;
+      progress.appendChild(progressLabel);
+
+      const progressBar = document.createElement("div");
+      progressBar.className = "progress__bar";
+      const progressFill = document.createElement("div");
+      progressFill.className = "progress__fill";
+      progressFill.style.width = `${percent !== null ? Math.min(percent, 100) : 0}%`;
+      progressBar.appendChild(progressFill);
+      progress.appendChild(progressBar);
+
+      const progressPercent = document.createElement("span");
+      progressPercent.className = "progress__percent";
+      progressPercent.textContent = percent !== null ? `${percent}% funded` : "";
+      progress.appendChild(progressPercent);
+
+      footer.appendChild(progress);
+
+      const timeline = document.createElement("p");
+      timeline.className = "campaign-item__timeline";
+      timeline.textContent = project.timeline;
+      footer.appendChild(timeline);
+
+      item.appendChild(footer);
+
       campaignPanel.appendChild(item);
     });
 
