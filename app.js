@@ -1,3 +1,20 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  serverTimestamp,
+  writeBatch,
+  query,
+  orderBy,
+  limit,
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 const STORAGE_KEY = "cropcarbon-portal-state-v2";
 
 const emissionFactors = {
@@ -134,6 +151,389 @@ const seededDonations = [
   },
 ];
 
+const FIREBASE_COLLECTIONS = {
+  projects: "projects",
+  updates: "updates",
+  donations: "donations",
+};
+
+const FIREBASE_SUMMARY_PATH = { collection: "campaign", docId: "summary" };
+
+let portalConfig = null;
+let portalConfigPromise = null;
+let firebaseAppInstance = null;
+let firebaseInitPromise = null;
+let firestoreDbInstance = null;
+
+function getCampaignSummaryRef(db) {
+  return doc(db, FIREBASE_SUMMARY_PATH.collection, FIREBASE_SUMMARY_PATH.docId);
+}
+
+async function ensurePortalConfig() {
+  if (portalConfig) {
+    return portalConfig;
+  }
+
+  if (!portalConfigPromise) {
+    portalConfigPromise = (async () => {
+      try {
+        const response = await fetch(`${STRIPE_API_BASE}/config`);
+        if (!response.ok) {
+          return {};
+        }
+        const payload = await response.json().catch(() => ({}));
+        return payload || {};
+      } catch (error) {
+        console.warn("Unable to load portal configuration", error);
+        return {};
+      }
+    })();
+  }
+
+  portalConfig = await portalConfigPromise;
+  return portalConfig;
+}
+
+function getFirebaseConfigFromCache() {
+  return portalConfig?.firebase?.config || null;
+}
+
+function hasFirebaseConfig(config = null) {
+  const firebaseConfig = config || getFirebaseConfigFromCache();
+  return Boolean(firebaseConfig && firebaseConfig.apiKey);
+}
+
+async function ensureFirebase() {
+  if (firestoreDbInstance) {
+    return firestoreDbInstance;
+  }
+
+  if (firebaseInitPromise) {
+    return firebaseInitPromise;
+  }
+
+  firebaseInitPromise = (async () => {
+    const config = await ensurePortalConfig();
+    const firebaseConfig = config?.firebase?.config;
+    if (!firebaseConfig || !firebaseConfig.apiKey) {
+      return null;
+    }
+
+    try {
+      firebaseAppInstance = initializeApp(firebaseConfig);
+      firestoreDbInstance = getFirestore(firebaseAppInstance);
+      return firestoreDbInstance;
+    } catch (error) {
+      console.error("Failed to initialise Firebase", error);
+      return null;
+    }
+  })();
+
+  const db = await firebaseInitPromise;
+  if (!db) {
+    firebaseInitPromise = null;
+  }
+  return db;
+}
+
+function firebaseTimestampToDate(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (typeof value.toDate === "function") {
+    try {
+      return value.toDate();
+    } catch (error) {
+      return null;
+    }
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function prepareProjectForFirestore(project, { includeServerTimestamp = false } = {}) {
+  const payload = {
+    title: project.title,
+    region: project.region,
+    focus: project.focus,
+    summary: project.summary,
+    hectares: Number(project.hectares) || 0,
+    farmers: Number(project.farmers) || 0,
+    carbon: Number(project.carbon) || 0,
+    raised: Number(project.raised) || 0,
+    goal: Number(project.goal) || 0,
+    status: project.status || "active",
+    timeline: project.timeline || "",
+    image: project.image || "",
+  };
+
+  if (includeServerTimestamp) {
+    payload.updatedAt = serverTimestamp();
+  }
+
+  return payload;
+}
+
+function prepareUpdateForFirestore(update, { includeServerTimestamp = true } = {}) {
+  const payload = {
+    title: update.title,
+    location: update.location,
+    status: update.status || "active",
+    hectares: Number(update.hectares) || 0,
+    farmers: Number(update.farmers) || 0,
+    carbon: Number(update.carbon) || 0,
+    raised: Number(update.raised) || 0,
+    goal: Number(update.goal) || 0,
+    summary: update.summary || "",
+  };
+
+  if (includeServerTimestamp) {
+    payload.updatedAt = serverTimestamp();
+  } else if (update.updatedAt) {
+    payload.updatedAt = toValidDate(update.updatedAt);
+  }
+
+  return payload;
+}
+
+function prepareDonationForFirestore(donation, { includeServerTimestamp = true } = {}) {
+  const payload = {
+    name: donation.name,
+    amount: Number(donation.amount) || 0,
+    frequency: donation.frequency || "once",
+    message: donation.message || "",
+  };
+
+  if (includeServerTimestamp) {
+    payload.timestamp = serverTimestamp();
+  } else if (donation.timestamp) {
+    payload.timestamp = toValidDate(donation.timestamp);
+  }
+
+  return payload;
+}
+
+async function ensureFirebaseSeedData() {
+  const db = await ensureFirebase();
+  if (!db) {
+    return false;
+  }
+
+  try {
+    const summaryRef = getCampaignSummaryRef(db);
+    const summarySnap = await getDoc(summaryRef);
+    if (!summarySnap.exists()) {
+      await setDoc(summaryRef, {
+        goal: 72000,
+        raised: 28650,
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    console.warn("Failed to seed Firebase campaign summary", error);
+  }
+
+  try {
+    const projectsQuery = query(collection(db, FIREBASE_COLLECTIONS.projects), limit(1));
+    const snapshot = await getDocs(projectsQuery);
+    if (snapshot.empty) {
+      const batch = writeBatch(db);
+      seededProjects.forEach((project) => {
+        batch.set(doc(db, FIREBASE_COLLECTIONS.projects, project.id), {
+          ...prepareProjectForFirestore(project),
+          updatedAt: toValidDate(project.updatedAt || new Date()),
+        });
+      });
+      await batch.commit();
+    }
+  } catch (error) {
+    console.warn("Failed to seed Firebase projects", error);
+  }
+
+  try {
+    const updatesQuery = query(collection(db, FIREBASE_COLLECTIONS.updates), limit(1));
+    const snapshot = await getDocs(updatesQuery);
+    if (snapshot.empty) {
+      const batch = writeBatch(db);
+      seededUpdates.forEach((update) => {
+        batch.set(doc(db, FIREBASE_COLLECTIONS.updates, update.id), {
+          ...prepareUpdateForFirestore(update, { includeServerTimestamp: false }),
+        });
+      });
+      await batch.commit();
+    }
+  } catch (error) {
+    console.warn("Failed to seed Firebase updates", error);
+  }
+
+  try {
+    const donationsQuery = query(collection(db, FIREBASE_COLLECTIONS.donations), limit(1));
+    const snapshot = await getDocs(donationsQuery);
+    if (snapshot.empty) {
+      const batch = writeBatch(db);
+      seededDonations.forEach((donation, index) => {
+        batch.set(doc(db, FIREBASE_COLLECTIONS.donations, `seed-${index + 1}`), {
+          ...prepareDonationForFirestore(donation, { includeServerTimestamp: false }),
+        });
+      });
+      await batch.commit();
+    }
+  } catch (error) {
+    console.warn("Failed to seed Firebase donations", error);
+  }
+
+  return true;
+}
+
+async function loadFirebaseStateFromFirestore() {
+  const db = await ensureFirebase();
+  if (!db) {
+    return null;
+  }
+
+  try {
+    const [summarySnap, projectsSnap, updatesSnap, donationsSnap] = await Promise.all([
+      getDoc(getCampaignSummaryRef(db)),
+      getDocs(collection(db, FIREBASE_COLLECTIONS.projects)),
+      getDocs(collection(db, FIREBASE_COLLECTIONS.updates)),
+      getDocs(query(collection(db, FIREBASE_COLLECTIONS.donations), orderBy("timestamp", "desc"), limit(24))),
+    ]);
+
+    const remoteState = createDefaultState();
+
+    if (summarySnap.exists()) {
+      const data = summarySnap.data();
+      remoteState.campaign.goal = Number(data.goal) || remoteState.campaign.goal;
+      remoteState.campaign.raised = Number(data.raised) || remoteState.campaign.raised;
+    }
+
+    const projectEntries = [];
+    projectsSnap.forEach((docSnap) => {
+      projectEntries.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    if (projectEntries.length) {
+      remoteState.campaign.projects = cloneProjects(projectEntries);
+    }
+
+    const updateEntries = [];
+    updatesSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      updateEntries.push({
+        id: docSnap.id,
+        ...data,
+        updatedAt: firebaseTimestampToDate(data.updatedAt) || firebaseTimestampToDate(data.publishedAt) || new Date(),
+      });
+    });
+    if (updateEntries.length) {
+      remoteState.updates = cloneUpdates(updateEntries);
+    }
+
+    const donationEntries = [];
+    donationsSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      donationEntries.push({
+        name: data.name,
+        amount: data.amount,
+        frequency: data.frequency,
+        message: data.message,
+        timestamp: firebaseTimestampToDate(data.timestamp) || new Date(),
+      });
+    });
+    if (donationEntries.length) {
+      remoteState.donations = cloneDonations(donationEntries);
+    }
+
+    remoteState.meta.updateCounter = Math.max(
+      remoteState.meta.updateCounter,
+      remoteState.updates.length + 1,
+      remoteState.updates.reduce((max, update) => {
+        const match = String(update.id || "").match(/(\d+)$/);
+        return Math.max(max, match ? Number(match[1]) + 1 : 0);
+      }, 0)
+    );
+
+    return remoteState;
+  } catch (error) {
+    console.error("Failed to load Firebase state", error);
+    return null;
+  }
+}
+
+async function syncCampaignSummaryToFirebase() {
+  const db = await ensureFirebase();
+  if (!db) {
+    return false;
+  }
+
+  try {
+    await setDoc(
+      getCampaignSummaryRef(db),
+      {
+        goal: Number(state.campaign.goal) || 0,
+        raised: Number(state.campaign.raised) || 0,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.warn("Failed to sync campaign summary to Firebase", error);
+    return false;
+  }
+}
+
+async function syncUpdateToFirebase(update) {
+  const db = await ensureFirebase();
+  if (!db) {
+    return false;
+  }
+
+  try {
+    await setDoc(
+      doc(db, FIREBASE_COLLECTIONS.updates, update.id),
+      prepareUpdateForFirestore(update),
+      { merge: true }
+    );
+    return true;
+  } catch (error) {
+    console.warn("Failed to sync update to Firebase", error);
+    return false;
+  }
+}
+
+async function deleteUpdateFromFirebase(updateId) {
+  const db = await ensureFirebase();
+  if (!db) {
+    return false;
+  }
+
+  try {
+    await deleteDoc(doc(db, FIREBASE_COLLECTIONS.updates, updateId));
+    return true;
+  } catch (error) {
+    console.warn("Failed to delete update from Firebase", error);
+    return false;
+  }
+}
+
+async function recordDonationInFirebase(donation) {
+  const db = await ensureFirebase();
+  if (!db) {
+    return false;
+  }
+
+  try {
+    await addDoc(collection(db, FIREBASE_COLLECTIONS.donations), prepareDonationForFirestore(donation));
+    return true;
+  } catch (error) {
+    console.warn("Failed to record donation in Firebase", error);
+    return false;
+  }
+}
+
 let STRIPE_PUBLISHABLE_KEY =
   document.querySelector('meta[name="stripe-publishable-key"]')?.getAttribute("content")?.trim() || "";
 const STRIPE_API_BASE = "/api";
@@ -194,17 +594,9 @@ async function ensureStripePublishableKey() {
     return STRIPE_PUBLISHABLE_KEY;
   }
 
-  try {
-    const response = await fetch(`${STRIPE_API_BASE}/config`);
-    if (!response.ok) {
-      return STRIPE_PUBLISHABLE_KEY;
-    }
-    const payload = await response.json().catch(() => ({}));
-    if (payload?.publishableKey) {
-      STRIPE_PUBLISHABLE_KEY = String(payload.publishableKey);
-    }
-  } catch (error) {
-    console.warn("Unable to load Stripe publishable key", error);
+  const config = await ensurePortalConfig();
+  if (config?.publishableKey) {
+    STRIPE_PUBLISHABLE_KEY = String(config.publishableKey);
   }
 
   return STRIPE_PUBLISHABLE_KEY;
@@ -366,12 +758,13 @@ function hydrateState(stored) {
   const updates = Array.isArray(stored.updates) ? stored.updates : [];
   const donations = Array.isArray(stored.donations) ? stored.donations : [];
   const meta = stored.meta || {};
+  const projects = Array.isArray(campaign.projects) ? campaign.projects : [];
 
   return {
     campaign: {
       goal: Number(campaign.goal) || base.campaign.goal,
       raised: Number(campaign.raised) || base.campaign.raised,
-      projects: base.campaign.projects,
+      projects: projects.length ? cloneProjects(projects) : base.campaign.projects,
     },
     updates: updates.length ? cloneUpdates(updates) : base.updates,
     donations: donations.length ? cloneDonations(donations) : base.donations,
@@ -892,10 +1285,19 @@ function renderAdminUpdates() {
   });
 }
 
+function refreshUi() {
+  renderCampaignPanel();
+  updateCampaignOverview();
+  renderDonations();
+  updateImpactStats();
+  renderUpdates();
+  renderAdminUpdates();
+}
+
 function showAdminMessage(message, tone = "info") {
   adminFeedback.textContent = message;
   adminFeedback.dataset.tone = tone;
-  if (message) {
+  if (message && tone === "info") {
     setTimeout(() => {
       adminFeedback.textContent = "";
       adminFeedback.dataset.tone = "";
@@ -1007,14 +1409,16 @@ async function completeStripeDonation(sessionId) {
       "Supporter";
 
     const donationAmount = Math.max(amount, 0);
+    let donationRecord = null;
     if (donationAmount > 0) {
-      state.donations.unshift({
+      donationRecord = {
         name,
         amount: donationAmount,
         frequency,
         message,
         timestamp: new Date(),
-      });
+      };
+      state.donations.unshift(donationRecord);
 
       if (frequency === "monthly") {
         state.campaign.raised += donationAmount * 12;
@@ -1025,10 +1429,21 @@ async function completeStripeDonation(sessionId) {
 
     markSessionProcessed(sessionId);
     persistState();
-    renderDonations();
-    updateImpactStats();
-    updateCampaignOverview();
+    refreshUi();
     showDonationFeedback("Thank you! Your Stripe payment is confirmed.", "success");
+
+    if (donationRecord) {
+      const syncTasks = [
+        syncCampaignSummaryToFirebase(),
+        recordDonationInFirebase(donationRecord),
+      ];
+
+      const results = await Promise.allSettled(syncTasks);
+      const hadFailure = results.some((result) => result.status === "rejected" || result.value === false);
+      if (hadFailure) {
+        console.warn("Donation synced locally but Firebase update failed.", results);
+      }
+    }
   } catch (error) {
     console.error("Failed to reconcile Stripe session", error);
     showDonationFeedback(
@@ -1149,7 +1564,7 @@ async function handleDonationSubmit(event) {
   }
 }
 
-function handleCampaignFormSubmit(event) {
+async function handleCampaignFormSubmit(event) {
   event.preventDefault();
   const goal = Math.max(Number(adminGoalInput.value) || 0, 0);
   const raised = Math.max(Number(adminRaisedInput.value) || 0, 0);
@@ -1157,11 +1572,24 @@ function handleCampaignFormSubmit(event) {
   state.campaign.goal = goal;
   state.campaign.raised = raised;
   persistState();
-  renderDonations();
+  refreshUi();
   showAdminMessage("Campaign totals updated.");
+
+  try {
+    const synced = await syncCampaignSummaryToFirebase();
+    if (!synced) {
+      showAdminMessage(
+        "Campaign totals saved locally. Add Firebase credentials to sync across devices.",
+        "warning"
+      );
+    }
+  } catch (error) {
+    console.warn("Campaign sync failed", error);
+    showAdminMessage("Campaign totals saved locally. Firebase sync failed.", "warning");
+  }
 }
 
-function handleUpdateFormSubmit(event) {
+async function handleUpdateFormSubmit(event) {
   event.preventDefault();
   const formData = new FormData(adminUpdateForm);
   const title = formData.get("title")?.trim();
@@ -1196,12 +1624,21 @@ function handleUpdateFormSubmit(event) {
 
   adminUpdateForm.reset();
   persistState();
-  renderUpdates();
-  renderAdminUpdates();
+  refreshUi();
   showAdminMessage("New field update published.");
+
+  try {
+    const synced = await syncUpdateToFirebase(state.updates[0]);
+    if (!synced) {
+      showAdminMessage("Update saved locally. Add Firebase credentials to sync across devices.", "warning");
+    }
+  } catch (error) {
+    console.warn("Failed to sync new update", error);
+    showAdminMessage("Update saved locally. Firebase sync failed.", "warning");
+  }
 }
 
-function handleAdminUpdatesInteraction(event) {
+async function handleAdminUpdatesInteraction(event) {
   const item = event.target.closest(".admin-updates__item");
   if (!item) return;
   const id = item.dataset.id;
@@ -1229,33 +1666,77 @@ function handleAdminUpdatesInteraction(event) {
     update.updatedAt = new Date();
 
     persistState();
-    renderUpdates();
-    renderAdminUpdates();
+    refreshUi();
     showAdminMessage("Update saved.");
+
+    try {
+      const synced = await syncUpdateToFirebase(update);
+      if (!synced) {
+        showAdminMessage("Update saved locally. Add Firebase credentials to sync across devices.", "warning");
+      }
+    } catch (error) {
+      console.warn("Failed to sync edited update", error);
+      showAdminMessage("Update saved locally. Firebase sync failed.", "warning");
+    }
   }
 
-  if (event.target.classList.contains("admin-delete")) {
+  else if (event.target.classList.contains("admin-delete")) {
     state.updates = state.updates.filter((entry) => entry.id !== id);
     persistState();
-    renderUpdates();
-    renderAdminUpdates();
+    refreshUi();
     showAdminMessage("Update removed.", "warning");
+
+    try {
+      const synced = await deleteUpdateFromFirebase(id);
+      if (!synced) {
+        showAdminMessage("Update removed locally. Add Firebase credentials to sync across devices.", "warning");
+      }
+    } catch (error) {
+      console.warn("Failed to delete update in Firebase", error);
+      showAdminMessage("Update removed locally. Firebase sync failed.", "warning");
+    }
   }
 }
 
-function initializeAdminForms() {
-  adminGoalInput.value = state.campaign.goal.toString();
-  adminRaisedInput.value = state.campaign.raised.toString();
-  renderAdminUpdates();
+async function bootstrapFirebaseSync() {
+  try {
+    const config = await ensurePortalConfig();
+    if (!hasFirebaseConfig(config)) {
+      showAdminMessage(
+        "Add your Firebase credentials to sync projects, updates, and donations across visitors.",
+        "warning"
+      );
+      return;
+    }
+
+    const db = await ensureFirebase();
+    if (!db) {
+      showAdminMessage("Firebase initialisation failed. Double-check your Firebase credentials.", "error");
+      return;
+    }
+
+    await ensureFirebaseSeedData();
+    const remoteState = await loadFirebaseStateFromFirestore();
+    if (remoteState) {
+      const existingProcessedSessions = Array.isArray(state.meta?.processedSessions)
+        ? [...state.meta.processedSessions]
+        : [];
+      state = remoteState;
+      state.meta.updateCounter = Math.max(state.meta.updateCounter || 1, state.updates.length + 1);
+      const remoteProcessed = Array.isArray(state.meta.processedSessions) ? state.meta.processedSessions : [];
+      state.meta.processedSessions = [...new Set([...remoteProcessed, ...existingProcessedSessions])];
+      persistState();
+      refreshUi();
+    }
+  } catch (error) {
+    console.warn("Firebase bootstrap failed", error);
+    showAdminMessage("We couldn't load Firebase data. Check your configuration and try again.", "warning");
+  }
 }
 
 document.getElementById("year").textContent = new Date().getFullYear();
-renderCampaignPanel();
-updateCampaignOverview();
-renderDonations();
-updateImpactStats();
-renderUpdates();
-initializeAdminForms();
+refreshUi();
+const firebaseBootstrapPromise = bootstrapFirebaseSync();
 
 ensureStripePublishableKey()
   .then((key) => {
@@ -1271,13 +1752,19 @@ ensureStripePublishableKey()
     );
   });
 
-maybeHandleStripeReturn().catch((error) => {
-  console.error("Stripe return handling failed", error);
-  showDonationFeedback(
-    "We couldn't verify your Stripe payment. Please contact us with your Stripe receipt.",
-    "error",
-  );
-});
+firebaseBootstrapPromise
+  .catch((error) => {
+    console.warn("Bootstrap encountered an error", error);
+  })
+  .finally(() => {
+    maybeHandleStripeReturn().catch((error) => {
+      console.error("Stripe return handling failed", error);
+      showDonationFeedback(
+        "We couldn't verify your Stripe payment. Please contact us with your Stripe receipt.",
+        "error",
+      );
+    });
+  });
 
 const initialData = new FormData(footprintForm);
 const { perPerson: initialPerPerson } = calculateFootprint(initialData);

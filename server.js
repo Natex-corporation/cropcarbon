@@ -13,6 +13,20 @@ const stripe = stripeSecretKey
     })
   : null;
 
+function buildFirebaseConfig() {
+  const config = {
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
+    measurementId: process.env.FIREBASE_MEASUREMENT_ID,
+  };
+
+  return Object.fromEntries(Object.entries(config).filter(([, value]) => Boolean(value)));
+}
+
 if (!stripeSecretKey) {
   console.warn('Stripe secret key is not configured. API routes will return errors until it is provided.');
 }
@@ -159,7 +173,14 @@ app.get('/api/session/:id', async (req, res) => {
 });
 
 app.get('/api/config', (req, res) => {
-  res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '' });
+  const payload = { publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '' };
+  const firebaseConfig = buildFirebaseConfig();
+
+  if (Object.keys(firebaseConfig).length > 0) {
+    payload.firebase = { config: firebaseConfig };
+  }
+
+  res.json(payload);
 });
 
 app.get('*', (req, res) => {

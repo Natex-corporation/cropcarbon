@@ -7,7 +7,7 @@ A lightweight static web app that lets visitors:
 - Explore a polished campaign portfolio with live project metrics, funding progress, and portfolio rollups.
 - Make donations through secure Stripe Checkout, watch campaign progress update, and see impact metrics move in real time.
 - Manage content from a built-in admin panel—no need to edit source files for quick changes.
-- Keep edits between sessions thanks to automatic local storage persistence.
+- Persist campaign projects, field updates, and donations in Firebase Firestore (with local caching for offline edits).
 - Offer donors a clear breakdown of how funds flow across deployment, farmer enablement, and verification.
 
 ## Getting Started
@@ -24,7 +24,8 @@ npm install
 
 1. Copy `.env.example` to `.env`.
 2. Fill in `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, and (optionally) `APP_URL` with your own values.
-3. Use Stripe test keys while building and swap to live keys before launch.
+3. Populate the Firebase fields (`FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID`, etc.) from your Firebase project settings so projects sync through Firestore.
+4. Use Stripe test keys while building and swap to live keys before launch.
 
 ### 3. Start the server
 
@@ -40,7 +41,13 @@ By default the app is available at [http://localhost:3000](http://localhost:3000
 2. Browse the refreshed campaign grid, transparency breakdown, and field dispatch feed to see how funding is used.
 3. Use the donation form to launch a real Stripe Checkout session—successful payments are reconciled back into the portal automatically.
 4. Click **Open Admin** in the hero to edit campaign totals or publish new field updates instantly.
-5. Refresh the page—your edits persist locally so you can continue curating without re-entry.
+5. Refresh the page—your edits persist through Firestore (or local cache if offline) so you can continue curating without re-entry.
+
+### 5. Connect Firebase (optional but recommended)
+
+- With valid Firebase credentials the portal automatically seeds Firestore with the starter projects, updates, and donations.
+- Subsequent admin changes write back to Firestore so every visitor (and device) sees the same curated content.
+- If Firebase is not configured the portal gracefully falls back to local storage so you can still demo the experience.
 
 ## Project Structure
 
@@ -70,3 +77,9 @@ By default the app is available at [http://localhost:3000](http://localhost:3000
 - **Set `APP_URL` for production** – Stripe must redirect back to a publicly accessible URL; update the value when deploying.
 - **Webhooks recommended** – The portal updates totals on the client once Stripe confirms payment, but production deployments should also consume webhooks for a source-of-truth ledger.
 - **Recurring donations** – Selecting monthly or annual frequency creates a Stripe subscription session using the amount you enter.
+
+## Firebase integration tips
+
+- **Firestore structure** – The app stores campaign totals in `campaign/summary`, project tiles in the top-level `projects` collection, field updates in `updates`, and a rolling donation log in `donations`.
+- **Security rules** – Lock down read/write access to authenticated admins before launching publicly; the demo assumes development rules.
+- **Seeding behaviour** – When the collections are empty the portal writes the seeded sample data to Firestore so you never start with a blank screen.
