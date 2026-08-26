@@ -1,0 +1,33 @@
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.token
+secrets/
+
+# Python & Node build artifacts
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+build/
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.vs/
+*.ipch
+*.pch
+*.aps
+*.obj
+*.pdb
+*.tlog
+
+# Proprietary PCB files (BoilerBattery)
+*.kicad_pcb
+*.kicad_sch
+*.kicad_pr
+*.kicad_pro
